@@ -1,0 +1,114 @@
+---
+title: "logistic regression with stan"
+output: html_notebook
+---
+
+## packages
+
+```{r}
+library(tidyverse)
+library(rstan)
+library(conflicted)
+conflict_prefer("extract", "rstan")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("Position", "ggplot2")
+```
+
+## invent some data
+
+the usual killing rats
+
+```{r}
+rats <- tribble(
+  ~dose, ~status,
+  1, "lived",
+  2, "lived",
+  3, "died",
+  4, "lived",
+  5, "died",
+  6, "died",
+  7, "died",
+  1, "lived",
+  2, "lived",
+  3, "lived",
+  4, "died",
+  5, "lived",
+  6, "died",
+  7, "died"
+)
+rats
+```
+
+fit usual glm
+
+```{r}
+rats.1=glm(factor(status)~dose, data=rats, family="binomial")
+summary(rats.1)
+```
+
+probability of living goes down as dose goes up
+
+## set up data for stan
+
+compile stan code
+
+```{r}
+rats_compiled=stan_model("logistic.stan")
+```
+
+
+```{r}
+(rats %>% mutate(y=ifelse(status=="lived", 1, 0)) -> rats)
+```
+
+set up data
+
+```{r}
+rats_data=with(rats, list(n=nrow(rats), dose=dose, y=y))
+rats_data
+```
+
+sample
+
+```{r}
+rats.2=sampling(rats_compiled, data=rats_data)
+rats.2
+```
+
+do some posterior predictive
+
+```{r}
+rats.2_e=extract(rats.2)
+dose=3
+eta=rats.2_e$a+dose*rats.2_e$b
+tibble(eta) %>% 
+  mutate(p=plogis(eta)) %>% 
+  mutate(y=rbinom(4000, 1, p)) %>% 
+  count(y) %>% 
+  mutate(prop=n/sum(n)) %>% 
+  pluck("prop", 2)
+```
+
+write a function of this
+
+```{r}
+post_sim = function(e, dose) {
+  eta = e$a + dose * e$b
+  tibble(eta) %>%
+    mutate(p = plogis(eta)) %>%
+    mutate(y = rbinom(4000, 1, p)) %>%
+    count(y) %>%
+    mutate(prop = n / sum(n)) %>%
+    pluck("prop", 2)
+}
+post_sim(rats.2_e, 3)
+```
+
+and then for several doses
+
+```{r}
+tibble(dose=1:7) %>% 
+  mutate(p_live=map_dbl(dose, ~post_sim(rats.2_e, .)))
+```
+

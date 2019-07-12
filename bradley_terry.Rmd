@@ -1,0 +1,18 @@
+---
+title: "basic bradley terry"
+output: html_notebook
+---
+
+## packages
+
+```{r}
+library(tidyverse)
+library(rstan)
+library(conflicted)
+conflict_prefer("extract", "rstan")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("Position", "ggplot2")
+```
+
+## 
